@@ -7,15 +7,17 @@ const {apply,empty}=await import('data:text/javascript;base64,'+Buffer.from(js).
 const actor={userId:'test-user',displayName:'Operador de teste'};
 const t=new Date('2026-10-10T14:00:00Z');
 let s=apply(empty(),{action:'material',name:'Item de teste',code:'T1',unit:'un',category:'Teste',kind:'returnable',minimum:2},actor,t);
+s=apply(s,{action:'recipient',name:'Pessoa Teste',cpfPrefix:'012345'},actor,t);
+const recipientId=s.recipients[0].id;
 const id=s.materials[0].id;
 const run=b=>s=apply(s,{materialId:id,...b},actor,t);
 run({action:'entry',quantity:10});
 assert.equal(s.materials[0].available,10);
-run({action:'out',quantity:4,person:'Pessoa teste',registration:'001'});
+run({action:'out',quantity:4,recipientId});
 assert.equal(s.materials[0].available,6);assert.equal(s.loans[0].due,'2026-10-11T14:00:00.000Z');
 const loanId=s.loans[0].id;
-assert.throws(()=>run({action:'out',quantity:7,person:'P',registration:'1'}),/estoque/);
-assert.throws(()=>run({action:'out',quantity:1,person:'P'}),/matrícula/);
+assert.throws(()=>run({action:'out',quantity:7,recipientId}),/estoque/);
+assert.throws(()=>run({action:'out',quantity:1,person:'P'}),/pessoa cadastrada/);
 assert.throws(()=>run({action:'return',quantity:5,loanId}),/pendência/);
 run({action:'return',quantity:1,loanId});assert.equal(s.loans[0].remaining,3);assert.equal(s.materials[0].available,7);
 run({action:'loanIncident',quantity:1,loanId,reason:'Dano',note:'Teste'});assert.equal(s.materials[0].maintenance,1);assert.equal(s.loans[0].remaining,2);
@@ -30,7 +32,15 @@ run({action:'replacement',quantity:1});assert.equal(s.materials[0].available,10)
 run({action:'minimum',minimum:3});assert.equal(s.materials[0].minimum,3);
 assert.ok(s.movements.every(m=>m.actorId==='test-user'&&m.at===t.toISOString()));
 assert.throws(()=>run({action:'material',name:'Duplicado',code:'t1',unit:'un',category:'T',kind:'consumable',minimum:0}),/código/);
-let c=apply(empty(),{action:'material',name:'Consumível teste',code:'C1',unit:'kg',category:'T',kind:'consumable',minimum:0},actor,t);const cid=c.materials[0].id;
-c=apply(c,{action:'entry',materialId:cid,quantity:1.5},actor,t);c=apply(c,{action:'out',materialId:cid,quantity:.2,person:'P',registration:'1'},actor,t);
+let c=apply(empty(),{action:'material',name:'Consumível teste',code:'C1',unit:'kg',category:'T',kind:'consumable',minimum:0},actor,t);const cid=c.materials[0].id;c=apply(c,{action:'recipient',name:'Pessoa Teste',cpfPrefix:'012345'},actor,t);const cr=c.recipients[0].id;
+c=apply(c,{action:'entry',materialId:cid,quantity:1.5},actor,t);c=apply(c,{action:'out',materialId:cid,quantity:.2,recipientId:cr},actor,t);
 assert.equal(c.materials[0].available,1.3);assert.equal(c.loans.length,0);assert.equal(c.movements[0].type,'Consumo');
 console.log('PASS: saldo, prazo de 24h, devolução parcial, danos, extravio, manutenção, reposição, auditoria, consumíveis e entradas inválidas.');
+
+assert.equal(s.loans[0].cpfPrefix,'012345');assert.equal(s.loans[0].recipientId,recipientId);
+assert.equal(s.movements.find(m=>m.type==='Devolução').cpfPrefix,'012345');
+for(const cpfPrefix of ['12345','1234567','123.45','abcdef','12345678901',123456])assert.throws(()=>run({action:'recipient',name:'Pessoa Inválida',cpfPrefix}),/6 primeiros/);
+assert.throws(()=>run({action:'recipient',name:'Pessoa Teste',cpfPrefix:'012345'}),/já está/);
+run({action:'recipient',name:'Outra Pessoa',cpfPrefix:'012345'});assert.equal(s.recipients.length,2);
+const legacy={materials:[],loans:[],movements:[]};const upgraded=apply(legacy,{action:'recipient',name:'Pessoa Nova',cpfPrefix:'000001'},actor,t);assert.equal(upgraded.recipients[0].cpfPrefix,'000001');
+console.log('PASS: destinatário obrigatório, CPF de seis dígitos, zeros iniciais, colisões de prefixo e compatibilidade com dados anteriores.');
