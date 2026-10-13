@@ -43,14 +43,12 @@ Sistema responsivo em português para almoxarifado, com banco persistente D1 e c
 - As migrações acrescentam tabelas de autenticação sem substituir o inventário existente.
 - `node tests/auth.test.mjs` testa as rotas com SQLite em memória e as regras de autenticação. Não cria contas na produção.
 
-## Almoxarifados separados
-- No login, cadastro ou recuperação, selecione **Almoxarifado SSMA** ou **Almoxarifado Obra**. A mesma conta pode entrar nos dois; a seleção define a área de trabalho da sessão, não um perfil de permissão.
-- SSMA aceita cadastro com categoria fixa EPI. Obra permite categorias de materiais em geral.
-- Catálogo, códigos, saldos, pessoas, entradas, entregas, devoluções, ocorrências, indicadores e relatórios ficam separados por área. Um mesmo código pode existir em cada almoxarifado.
-- A API decide a área a partir da sessão no servidor. Requisições com outra área são rejeitadas. Operações originadas de uma aba com área antiga são bloqueadas.
-- O inventário existente continua no Almoxarifado Obra (registro 1). SSMA usa um inventário novo e independente (registro 2), inicialmente vazio. Nenhum material antigo é reclassificado automaticamente.
-- A migração acrescenta a área às sessões existentes com padrão Obra. Nenhum dado de inventário é excluído ou movido.
-- Para trocar, saia da sessão e escolha o outro almoxarifado na tela de entrada. O nome da área aparece no cabeçalho e nos relatórios/exportações.
+## Almoxarifado único: SSMA
+- Login, cadastro e recuperação direcionam diretamente ao SSMA, sem seleção de área.
+- Todas as sessões, inclusive as já existentes, acessam apenas o inventário SSMA (registro 2). Nenhuma nova tabela, migração ou recriação de inventário é necessária.
+- Os EPIs, pessoas, saldos, movimentos, pendências e histórico do SSMA são preservados. Contas e senhas também continuam válidas.
+- O módulo de materiais gerais foi removido do acesso e da interface. O registro anterior do Obra não é mais consultado nem alterado por nenhuma rota operacional; não foi apagado fisicamente.
+- Requisições antigas com área Obra são rejeitadas, evitando que abas antigas registrem operações no SSMA por engano.
 
 ## Relatórios de estoque e compra
 - Em Relatórios, selecione Estoque atual, Pedido de compra ou Movimentações e pendências. Cada relatório pode ser impresso/salvo como PDF; estoque e pedido têm exportação CSV própria.

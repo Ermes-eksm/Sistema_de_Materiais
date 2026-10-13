@@ -5,17 +5,17 @@ export const dynamic='force-dynamic';
 const response=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(req?:Request){
  const user=await getOperator();if(!user)return response({error:'Entre com sua conta para acessar.'},401);
- if(req&&new URL(req.url).searchParams.get('warehouse')&&new URL(req.url).searchParams.get('warehouse')!==user.warehouse)return response({error:'O almoxarifado da sessão mudou. Entre novamente para selecionar a área.'},401);
- try{const row=await env.DB!.prepare('SELECT version, payload FROM inventory WHERE id = ?').bind(user.warehouse==='obra'?1:2).first<{version:number;payload:string}>();return response({state:row?{...empty(),...JSON.parse(row.payload)}:empty(),version:row?.version??0,warehouse:user.warehouse,user:user.displayName,serverTime:new Date().toISOString()});}catch{return response({error:'Não foi possível carregar os dados. Tente novamente.'},503);}
+ if(req&&new URL(req.url).searchParams.get('warehouse')&&new URL(req.url).searchParams.get('warehouse')!==user.warehouse)return response({error:'O sistema agora é exclusivo do SSMA. Atualize a página para continuar.'},401);
+ try{const row=await env.DB!.prepare('SELECT version, payload FROM inventory WHERE id = ?').bind(2).first<{version:number;payload:string}>();return response({state:row?{...empty(),...JSON.parse(row.payload)}:empty(),version:row?.version??0,warehouse:user.warehouse,user:user.displayName,serverTime:new Date().toISOString()});}catch{return response({error:'Não foi possível carregar os dados. Tente novamente.'},503);}
 }
 export async function POST(req:Request){
  const user=await getOperator();if(!user)return response({error:'Sua sessão expirou. Entre novamente.'},401);
  if(req.headers.get('origin')!==new URL(req.url).origin)return response({error:'Origem inválida.'},403);
  try{
  const b:any=await req.json();
- if(b.warehouse!==user.warehouse)return response({error:'O almoxarifado da sessão mudou. Recarregue a página antes de registrar.'},409);
- if(user.warehouse==='ssma'&&b.action==='material'&&b.category!=='EPI')return response({error:'O Almoxarifado SSMA permite cadastrar somente EPI.'},400);
- const inventoryId=user.warehouse==='obra'?1:2;
+ if(b.warehouse&&b.warehouse!=='ssma')return response({error:'O almoxarifado geral foi desativado. Atualize a página para acessar o SSMA.'},409);
+ if(b.action==='material'&&b.category!=='EPI')return response({error:'O Almoxarifado SSMA permite cadastrar somente EPI.'},400);
+ const inventoryId=2; // Preserve the existing SSMA inventory. Never recreate or merge it.
  if(!Number.isInteger(b.version)||b.version<0)throw Error('Versão inválida.');
  await env.DB!.prepare('INSERT OR IGNORE INTO inventory (id, version, payload) VALUES (?, 0, ?)').bind(inventoryId,JSON.stringify(empty())).run();
  const row=await env.DB!.prepare('SELECT version, payload FROM inventory WHERE id = ?').bind(inventoryId).first<{version:number;payload:string}>();

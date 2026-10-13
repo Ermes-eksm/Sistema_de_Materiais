@@ -19,7 +19,7 @@ export async function POST(req:Request){
  return reply({ok:true},200,sessionCookie('',0));
  }
  if(!['signup','login','recover'].includes(b.action))return reply({error:'Operação inválida.'},400);
- const warehouse=b.warehouse;if(!['obra','ssma'].includes(warehouse))return reply({error:'Selecione Almoxarifado SSMA ou Almoxarifado Obra.'},400);
+ const warehouse='ssma';if(b.warehouse&&b.warehouse!=='ssma')return reply({error:'O sistema agora é exclusivo do Almoxarifado SSMA. Atualize a página para entrar.'},400);
  const email=normalizeEmail(b.email),password=b.password;
  if(!email||typeof password!=='string'||password.length>128)return reply({error:'Informe e-mail e senha válidos.'},400);
  const ip=req.headers.get('cf-connecting-ip')||'unavailable';

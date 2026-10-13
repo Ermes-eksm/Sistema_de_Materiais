@@ -13,7 +13,7 @@ const auth=await load('app/api/auth/route.ts',s=>s.replace("import {env} from 'c
 globalThis.__domain=await load('app/domain.ts');
 const state=await load('app/api/state/route.ts',s=>s.replace("import { env } from 'cloudflare:workers';","const env=globalThis.__env;").replace("import { getOperator } from '../../operator-auth';","const {getOperator}=globalThis.__operator;").replace("import { apply, empty } from '../../domain';","const {apply,empty}=globalThis.__domain;"));
 const url='https://test.example';
-async function post(b,cookie='',origin=url,ip='127.0.0.1'){const r=new Request(url+'/api/auth',{method:'POST',headers:{origin,cookie,'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify({warehouse:'obra',...b})});globalThis.__headers=r.headers;const res=await auth.POST(r);return{res,json:await res.json(),cookie:res.headers.get('set-cookie')?.split(';')[0]||''};}
+async function post(b,cookie='',origin=url,ip='127.0.0.1'){const r=new Request(url+'/api/auth',{method:'POST',headers:{origin,cookie,'content-type':'application/json','cf-connecting-ip':ip},body:JSON.stringify(b)});globalThis.__headers=r.headers;const res=await auth.POST(r);return{res,json:await res.json(),cookie:res.headers.get('set-cookie')?.split(';')[0]||''};}
 assert.equal((await state.GET()).status,401);
 const email='operator@example.test',password='a-long-password-for-test';
 assert.equal((await post({action:'signup',name:'Operador Teste',email,password},'','https://other.example')).res.status,403);
@@ -32,32 +32,29 @@ assert.equal((await post({action:'recover',email,password:'changed-password-456'
 assert.equal((await post({action:'login',email,password})).res.status,401);
 const newLogin=await post({action:'login',email,password:'changed-password-123'});assert.equal(newLogin.res.status,200);
 globalThis.__headers=new Headers({cookie:newLogin.cookie});const stock=await state.GET();assert.equal(stock.status,200);assert.deepEqual((await stock.json()).state.recipients,[]);
-const stateReq=new Request(url+'/api/state',{method:'POST',headers:{origin:url,cookie:newLogin.cookie},body:JSON.stringify({warehouse:'obra',version:0,action:'recipient',name:'Destinatário Teste',cpfPrefix:'012345'})});globalThis.__headers=stateReq.headers;
+const stateReq=new Request(url+'/api/state',{method:'POST',headers:{origin:url,cookie:newLogin.cookie},body:JSON.stringify({warehouse:'ssma',version:0,action:'recipient',name:'Destinatário Teste',cpfPrefix:'012345'})});globalThis.__headers=stateReq.headers;
 assert.equal((await state.POST(stateReq)).status,200);
-const persisted=JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=1').get().payload);assert.equal(persisted.recipients[0].cpfPrefix,'012345');assert.equal(persisted.recipients[0].createdBy,'Operador Teste');
-// The same operator can select either warehouse; every record stays scoped to it.
-const wrongArea=await post({action:'login',email,password:'changed-password-123',warehouse:'invalid'});assert.equal(wrongArea.res.status,400);
-const missingArea=await post({action:'login',email,password:'changed-password-123',warehouse:null});assert.equal(missingArea.res.status,400);
-const ssmaLogin=await post({action:'login',email,password:'changed-password-123',warehouse:'ssma'});assert.equal(ssmaLogin.res.status,200);assert.equal(ssmaLogin.json.user.warehouse,'ssma');
-globalThis.__headers=new Headers({cookie:ssmaLogin.cookie});const initialSSMA=await (await state.GET()).json();assert.equal(initialSSMA.state.recipients.length,0);assert.equal(initialSSMA.version,0);assert.equal(initialSSMA.warehouse,'ssma');
-const obraBefore=JSON.stringify(db.prepare('SELECT * FROM inventory WHERE id=1').get());
-async function move(body,cookie,warehouse){const req=new Request(url+'/api/state',{method:'POST',headers:{origin:url,cookie},body:JSON.stringify({warehouse,...body})});globalThis.__headers=req.headers;const res=await state.POST(req);return{res,json:await res.json()};}
-assert.equal((await move({version:0,action:'material',name:'General test',code:'T01',category:'Geral',unit:'un',kind:'consumable',minimum:0},ssmaLogin.cookie,'ssma')).res.status,400);
-assert.equal((await move({version:0,action:'recipient',name:'Blocked Test',cpfPrefix:'999999'},ssmaLogin.cookie,'obra')).res.status,409);
-let ss=await move({version:0,action:'material',name:'EPI teste',code:'T01',category:'EPI',unit:'un',kind:'consumable',minimum:1},ssmaLogin.cookie,'ssma');assert.equal(ss.res.status,200);let ssVersion=ss.json.version;const ssMaterial=ss.json.state.materials[0].id;
-ss=await move({version:ssVersion,action:'entry',materialId:ssMaterial,quantity:5},ssmaLogin.cookie,'ssma');assert.equal(ss.res.status,200);ssVersion=ss.json.version;
-ss=await move({version:ssVersion,action:'recipient',name:'Pessoa SSMA',cpfPrefix:'000001'},ssmaLogin.cookie,'ssma');assert.equal(ss.res.status,200);ssVersion=ss.json.version;const ssRecipient=ss.json.state.recipients[0].id;
-ss=await move({version:ssVersion,action:'out',materialId:ssMaterial,quantity:1,recipientId:ssRecipient},ssmaLogin.cookie,'ssma');assert.equal(ss.res.status,200);assert.equal(ss.json.state.materials[0].available,4);
-assert.equal(JSON.stringify(db.prepare('SELECT * FROM inventory WHERE id=1').get()),obraBefore);
-globalThis.__headers=new Headers({cookie:ssmaLogin.cookie});assert.equal((await state.GET(new Request(url+'/api/state?warehouse=obra'))).status,401);
-globalThis.__headers=new Headers({cookie:newLogin.cookie});const obraRead=await (await state.GET()).json();assert.equal(obraRead.warehouse,'obra');assert.equal(obraRead.state.materials.length,0);assert.equal(obraRead.state.recipients.length,1);
-assert.equal((await move({version:obraRead.version,action:'entry',materialId:ssMaterial,quantity:1},newLogin.cookie,'obra')).res.status,400);
+const persisted=JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=2').get().payload);assert.equal(persisted.recipients[0].cpfPrefix,'012345');assert.equal(persisted.recipients[0].createdBy,'Operador Teste');
+// SSMA is the only operational inventory, including for legacy sessions.
+assert.equal(newLogin.json.user.warehouse,'ssma');
+const legacyData=JSON.stringify({materials:[{id:'general-only',name:'Material geral antigo'}],recipients:[],loans:[],movements:[]});
+db.prepare('INSERT INTO inventory (id,version,payload) VALUES (1,7,?)').run(legacyData);
+async function move(body,cookie){const req=new Request(url+'/api/state',{method:'POST',headers:{origin:url,cookie},body:JSON.stringify(body)});globalThis.__headers=req.headers;const res=await state.POST(req);return{res,json:await res.json()};}
+globalThis.__headers=new Headers({cookie:newLogin.cookie});const existing=await (await state.GET()).json();assert.equal(existing.warehouse,'ssma');assert.equal(existing.state.recipients[0].cpfPrefix,'012345');
+let ss=await move({version:existing.version,action:'material',name:'EPI já cadastrado',code:'EPI-1',category:'EPI',unit:'un',kind:'consumable',minimum:2},newLogin.cookie);assert.equal(ss.res.status,200);const materialId=ss.json.state.materials[0].id;
+ss=await move({version:ss.json.version,action:'entry',materialId,quantity:8},newLogin.cookie);assert.equal(ss.res.status,200);
 const ssmaBefore=JSON.stringify(db.prepare('SELECT * FROM inventory WHERE id=2').get());
-const ob=await move({version:obraRead.version,action:'material',name:'Material Obra teste',code:'T01',category:'Geral',unit:'un',kind:'returnable',minimum:0},newLogin.cookie,'obra');assert.equal(ob.res.status,200);assert.equal(ob.json.state.materials[0].category,'Geral');
+// Session from the former general warehouse now sees the existing SSMA dataset.
+const tokenHash=await globalThis.__password.digest(newLogin.cookie.split('=')[1]);db.prepare("UPDATE sessions SET warehouse='obra' WHERE token_hash=?").run(tokenHash);
+globalThis.__headers=new Headers({cookie:newLogin.cookie});const restored=await (await state.GET()).json();assert.equal(restored.warehouse,'ssma');assert.equal(restored.state.materials[0].id,materialId);assert.equal(restored.state.materials[0].available,8);assert.equal(restored.state.recipients[0].cpfPrefix,'012345');assert.ok(restored.state.movements.length>=3);
+assert.equal((await state.GET(new Request(url+'/api/state?warehouse=obra'))).status,401);
+assert.equal((await move({warehouse:'obra',version:restored.version,action:'entry',materialId,quantity:1},newLogin.cookie)).res.status,409);
+assert.equal((await move({version:restored.version,action:'material',name:'General blocked',code:'G1',category:'Geral',unit:'un',kind:'consumable',minimum:0},newLogin.cookie)).res.status,400);
+assert.equal((await move({version:restored.version,action:'entry',materialId:'general-only',quantity:1},newLogin.cookie)).res.status,400);
 assert.equal(JSON.stringify(db.prepare('SELECT * FROM inventory WHERE id=2').get()),ssmaBefore);
-// A session created before the migration defaults to Obra, preserving existing data.
-db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)').run('legacy',saved.id,Date.now()+60000);assert.equal(db.prepare("SELECT warehouse FROM sessions WHERE token_hash='legacy'").get().warehouse,'obra');
-console.log('PASS: SSMA/Obra isolated reads and writes, independent catalogs and recipient records, duplicate codes across warehouses, EPI-only SSMA, stale-tab scope rejection, and existing Obra data preserved.');
+assert.equal(db.prepare('SELECT payload FROM inventory WHERE id=1').get().payload,legacyData);
+assert.equal((await post({action:'login',email,password:'changed-password-123',warehouse:'obra'})).res.status,400);
+console.log('PASS: SSMA-only login, old-session compatibility, EPI quantities/history preserved, general inventory inaccessible and old-tab writes blocked.');
 globalThis.__headers=new Headers();assert.equal((await state.GET()).status,401);
 for(let i=0;i<16;i++)await post({action:'login',email:'absent@example.test',password:'wrong'},'',url,'127.0.0.2');
 assert.equal((await post({action:'login',email:'absent@example.test',password:'wrong'},'',url,'127.0.0.2')).res.status,429);
