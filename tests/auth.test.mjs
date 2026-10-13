@@ -90,4 +90,20 @@ assert.equal((await shared.GET(new Request(url+'/api/shared'))).status,404);asse
 globalThis.__headers=new Headers({cookie:newLogin.cookie});assert.equal((await shares.GET()).status,200);assert.equal((await shares.POST(shareReq({action:'revoke',id:link.id}))).status,200);globalThis.__headers=new Headers();assert.equal((await shared.GET(request)).status,404);
 console.log('PASS: anonymous read-only share, token hash, sanitized data, authenticated management, origin checks, rejected writes and revocation.');
 
+
+// Bulk import enforces either operator authentication or a temporary server secret.
+globalThis.__importPeople=await load('app/people-import.ts',s=>s.replace("import {apply,type State} from './domain';",'const {apply}=globalThis.__domain;'));
+const peopleAPI=await load('app/api/people/import/route.ts',s=>s.replace("import {env} from 'cloudflare:workers';",'const env=globalThis.__env;').replace("import {getOperator} from '../../../operator-auth';",'const {getOperator}=globalThis.__operator;').replace("import {digest,equalHash} from '../../../password';",'const {digest,equalHash}=globalThis.__password;').replace("import {empty,type State} from '../../../domain';",'const {empty}=globalThis.__domain;').replace("import {importPeople} from '../../../people-import';",'const {importPeople}=globalThis.__importPeople;'));
+const batch={source:'Teste',people:[{name:'Nova Pessoa Teste',registration:'TEST99',role:'Função de teste',cpf:'98765432100',admission:'2026-10-01'}]};
+const importReq=(bearer='',origin=url)=>new Request(url+'/api/people/import',{method:'POST',headers:{Authorization:'Bearer '+bearer,origin},body:JSON.stringify(batch)});
+globalThis.__headers=new Headers();assert.equal((await peopleAPI.POST(importReq())).status,401);
+const temporary=globalThis.__password.token();globalThis.__env.PEOPLE_IMPORT_TOKEN_HASH=await globalThis.__password.digest(temporary);
+assert.equal((await peopleAPI.POST(importReq('a'.repeat(64)))).status,401);
+const beforeImport=JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=2').get().payload);
+const result=await peopleAPI.POST(importReq(temporary));assert.equal(result.status,200);assert.equal((await result.json()).receipt.added,1);
+const afterImport=JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=2').get().payload);assert.deepEqual(afterImport.materials,beforeImport.materials);assert.deepEqual(afterImport.loans,beforeImport.loans);assert.equal(afterImport.recipients.at(-1).cpf,'98765432100');
+const repeat=await peopleAPI.POST(importReq(temporary));assert.equal(repeat.status,200);assert.deepEqual(JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=2').get().payload),afterImport);
+delete globalThis.__env.PEOPLE_IMPORT_TOKEN_HASH;assert.equal((await peopleAPI.POST(importReq(temporary))).status,401);
+globalThis.__headers=new Headers({cookie:newLogin.cookie});assert.equal((await peopleAPI.POST(importReq('','https://bad.example'))).status,403);
+console.log('PASS: protected bulk import, permanent stock/history preservation, replay safety and service-key revocation.');
 db.close();

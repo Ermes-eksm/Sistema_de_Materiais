@@ -40,7 +40,7 @@ console.log('PASS: saldo, prazo de 24h, devolução parcial, danos, extravio, ma
 assert.equal(s.loans[0].cpfPrefix,'012345');assert.equal(s.loans[0].recipientId,recipientId);
 assert.equal(s.movements.find(m=>m.type==='Devolução').cpfPrefix,'012345');
 for(const cpfPrefix of ['12345','1234567','123.45','abcdef','12345678901',123456])assert.throws(()=>run({action:'recipient',name:'Pessoa Inválida',cpfPrefix}),/6 primeiros/);
-assert.throws(()=>run({action:'recipient',name:'Pessoa Teste',cpfPrefix:'012345'}),/já está/);
+assert.throws(()=>run({action:'recipient',name:'Pessoa Teste',cpfPrefix:'012345'}),/Já existe cadastro/);
 run({action:'recipient',name:'Outra Pessoa',cpfPrefix:'012345'});assert.equal(s.recipients.length,2);
 const legacy={materials:[],loans:[],movements:[]};const upgraded=apply(legacy,{action:'recipient',name:'Pessoa Nova',cpfPrefix:'000001'},actor,t);assert.equal(upgraded.recipients[0].cpfPrefix,'000001');
 console.log('PASS: destinatário obrigatório, CPF de seis dígitos, zeros iniciais, colisões de prefixo e compatibilidade com dados anteriores.');
