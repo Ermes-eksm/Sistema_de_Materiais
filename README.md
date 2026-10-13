@@ -47,7 +47,7 @@ Sistema responsivo em português para almoxarifado, com banco persistente D1 e c
 - Login, cadastro e recuperação direcionam diretamente ao SSMA, sem seleção de área.
 - Todas as sessões, inclusive as já existentes, acessam apenas o inventário SSMA (registro 2). Nenhuma nova tabela, migração ou recriação de inventário é necessária.
 - Os EPIs, pessoas, saldos, movimentos, pendências e histórico do SSMA são preservados. Contas e senhas também continuam válidas.
-- O módulo de materiais gerais foi removido do acesso e da interface. O registro anterior do Obra não é mais consultado nem alterado por nenhuma rota operacional; não foi apagado fisicamente.
+- O módulo de materiais gerais foi removido do acesso e da interface. O registro original é mantido como origem de recuperação e não é apagado fisicamente.
 - Requisições antigas com área Obra são rejeitadas, evitando que abas antigas registrem operações no SSMA por engano.
 
 ## Relatórios de estoque e compra
@@ -57,6 +57,9 @@ Sistema responsivo em português para almoxarifado, com banco persistente D1 e c
 - Unidades de contagem reconhecidas (un, unidade, par, kit, caixa, pacote e abreviações) arredondam o alvo e a quantidade para cima até o inteiro. Outras unidades usam até três casas decimais, arredondadas para cima.
 - Mínimo zero exclui o item do pedido. Materiais em uso/manutenção não entram no saldo disponível. Emitir o pedido não altera o inventário e não representa compra efetivada.
 - Testes: `node tests/purchase.test.mjs`.
+
+## Recuperação do estoque original
+Quando o inventário SSMA (registro 2) ainda não existe, a API autenticada copia integralmente o inventário original (registro 1), preservando saldos, identificadores, histórico e versão. A cópia ocorre no banco, sem reconstruir ou expor dados operacionais no código. A origem permanece intacta. A operação é atômica e idempotente; um SSMA já existente nunca é substituído.
 
 ## Cópia GitHub
 Esta cópia não inclui credenciais, dados operacionais ou o identificador do Site. A aplicação requer backend Worker e D1; não funciona somente no GitHub Pages. Use Node.js 22.13+ e pnpm. Execute `pnpm install`, `pnpm dev` e aplique as migrações D1 em ordem no ambiente local. `pnpm build` gera o Worker. Login em produção exige HTTPS para o cookie seguro.
