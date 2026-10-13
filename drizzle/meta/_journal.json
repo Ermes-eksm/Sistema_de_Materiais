@@ -15,6 +15,13 @@
       "when": 1791650415390,
       "tag": "0001_clever_warstar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791651359500,
+      "tag": "0002_chemical_gamora",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `warehouse` text DEFAULT 'obra' NOT NULL;

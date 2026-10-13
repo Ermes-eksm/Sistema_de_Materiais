@@ -19,6 +19,7 @@ export async function POST(req:Request){
  return reply({ok:true},200,sessionCookie('',0));
  }
  if(!['signup','login','recover'].includes(b.action))return reply({error:'Operação inválida.'},400);
+ const warehouse=b.warehouse;if(!['obra','ssma'].includes(warehouse))return reply({error:'Selecione Almoxarifado SSMA ou Almoxarifado Obra.'},400);
  const email=normalizeEmail(b.email),password=b.password;
  if(!email||typeof password!=='string'||password.length>128)return reply({error:'Informe e-mail e senha válidos.'},400);
  const ip=req.headers.get('cf-connecting-ip')||'unavailable';
@@ -48,7 +49,7 @@ export async function POST(req:Request){
  const candidate=await hashPassword(password,operator?.salt||'0000000000000000000000000000000000000000000000000000000000000000');
  if(!operator||!equalHash(candidate,operator.password_hash))return reply({error:'E-mail ou senha incorretos.'},401);
  }
- const session=token();await env.DB!.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await digest(session),operator!.id,Date.now()+604800000).run();
- return reply({user:{displayName:operator!.name,email:operator!.email},recoveryCode},200,sessionCookie(session));
+ const session=token();await env.DB!.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, warehouse) VALUES (?, ?, ?, ?)').bind(await digest(session),operator!.id,Date.now()+604800000,warehouse).run();
+ return reply({user:{displayName:operator!.name,email:operator!.email,warehouse},recoveryCode},200,sessionCookie(session));
  }catch{return reply({error:'Não foi possível concluir. Confira os dados e tente novamente.'},400);}
 }

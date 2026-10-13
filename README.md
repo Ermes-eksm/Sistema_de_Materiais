@@ -43,5 +43,14 @@ Sistema responsivo em português para almoxarifado, com banco persistente D1 e c
 - As migrações acrescentam tabelas de autenticação sem substituir o inventário existente.
 - `node tests/auth.test.mjs` testa as rotas com SQLite em memória e as regras de autenticação. Não cria contas na produção.
 
+## Almoxarifados separados
+- No login, cadastro ou recuperação, selecione **Almoxarifado SSMA** ou **Almoxarifado Obra**. A mesma conta pode entrar nos dois; a seleção define a área de trabalho da sessão, não um perfil de permissão.
+- SSMA aceita cadastro com categoria fixa EPI. Obra permite categorias de materiais em geral.
+- Catálogo, códigos, saldos, pessoas, entradas, entregas, devoluções, ocorrências, indicadores e relatórios ficam separados por área. Um mesmo código pode existir em cada almoxarifado.
+- A API decide a área a partir da sessão no servidor. Requisições com outra área são rejeitadas. Operações originadas de uma aba com área antiga são bloqueadas.
+- O inventário existente continua no Almoxarifado Obra (registro 1). SSMA usa um inventário novo e independente (registro 2), inicialmente vazio. Nenhum material antigo é reclassificado automaticamente.
+- A migração acrescenta a área às sessões existentes com padrão Obra. Nenhum dado de inventário é excluído ou movido.
+- Para trocar, saia da sessão e escolha o outro almoxarifado na tela de entrada. O nome da área aparece no cabeçalho e nos relatórios/exportações.
+
 ## Cópia GitHub
 Esta cópia não inclui credenciais, dados operacionais ou o identificador do Site. A aplicação requer backend Worker e D1; não funciona somente no GitHub Pages. Use Node.js 22.13+ e pnpm. Execute `pnpm install`, `pnpm dev` e aplique as migrações D1 em ordem no ambiente local. `pnpm build` gera o Worker. Login em produção exige HTTPS para o cookie seguro.
