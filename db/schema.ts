@@ -5,3 +5,4 @@ export const operators = sqliteTable('operators', {
 });
 export const sessions = sqliteTable('sessions', {tokenHash:text('token_hash').primaryKey(), userId:text('user_id').notNull(), expiresAt:integer('expires_at').notNull(), warehouse:text('warehouse').notNull().default('obra')});
 export const authLimits = sqliteTable('auth_limits', {key:text('key').primaryKey(), attempts:integer('attempts').notNull(), expiresAt:integer('expires_at').notNull()});
+export const shareLinks = sqliteTable('share_links', {id:text('id').primaryKey(),tokenHash:text('token_hash').notNull().unique(),createdBy:text('created_by').notNull(),createdAt:text('created_at').notNull(),revokedAt:text('revoked_at')});

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 const db=new DatabaseSync(':memory:');
 for(const f of fs.readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync('drizzle/'+f,'utf8'));
-const D1={prepare(sql){let params=[];return{bind(...p){params=p;return this},async first(){return db.prepare(sql).get(...params)||null},async run(){const r=db.prepare(sql).run(...params);return{meta:{changes:Number(r.changes)}}}}},async batch(statements){db.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
+const D1={prepare(sql){let params=[];return{bind(...p){params=p;return this},async first(){return db.prepare(sql).get(...params)||null},async all(){return {results:db.prepare(sql).all(...params)}},async run(){const r=db.prepare(sql).run(...params);return{meta:{changes:Number(r.changes)}}}}},async batch(statements){db.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.run());db.exec('COMMIT');return r}catch(e){db.exec('ROLLBACK');throw e}}};
 globalThis.__env={DB:D1};globalThis.__headers=new Headers();
 async function load(file,transform=s=>s){const text=transform(fs.readFileSync(file,'utf8'));const output=ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;return import('data:text/javascript;base64,'+Buffer.from(output).toString('base64'));}
 globalThis.__password=await load('app/password.ts');
@@ -74,4 +74,20 @@ await state.GET();assert.equal(db.prepare('SELECT version FROM inventory WHERE i
 const afterRecovery=await move({version:completeSSMA.version,action:'entry',materialId,quantity:2},newLogin.cookie);assert.equal(afterRecovery.res.status,200);assert.equal(afterRecovery.json.state.materials[0].available,10);
 globalThis.__headers=new Headers({cookie:newLogin.cookie});await state.GET();assert.equal(JSON.parse(db.prepare('SELECT payload FROM inventory WHERE id=2').get().payload).materials[0].available,10);
 console.log('PASS: exact restoration of original stock, IDs/history/version preserved, source untouched, no duplicate recovery and new entries persist.');
+
+// Shared links are independent read-only capabilities, revocable server-side.
+globalThis.__sharedData=await load('app/shared-data.ts');
+const shareTransform=s=>s.replace("import {env} from 'cloudflare:workers';","const env=globalThis.__env;").replace("import {getOperator} from '../../operator-auth';","const {getOperator}=globalThis.__operator;").replace("import {token,digest} from '../../password';","const {token,digest}=globalThis.__password;").replace("import {digest} from '../../password';","const {digest}=globalThis.__password;").replace("import {empty} from '../../domain';","const {empty}=globalThis.__domain;").replace("import {sharedData} from '../../shared-data';","const {sharedData}=globalThis.__sharedData;");
+const shares=await load('app/api/shares/route.ts',shareTransform),shared=await load('app/api/shared/route.ts',shareTransform);
+function shareReq(body,origin=url){return new Request(url+'/api/shares',{method:'POST',headers:{origin},body:JSON.stringify(body)})}
+globalThis.__headers=new Headers();assert.equal((await shares.POST(shareReq({action:'create'}))).status,401);assert.equal((await shares.GET()).status,401);
+globalThis.__headers=new Headers({cookie:newLogin.cookie});assert.equal((await shares.POST(shareReq({action:'create'},'https://bad.example'))).status,403);
+const created=await shares.POST(shareReq({action:'create'}));assert.equal(created.status,200);const link=await created.json(),key=new URLSearchParams(new URL(link.url).hash.slice(1)).get('token');assert.equal(key.length,64);assert.notEqual(db.prepare('SELECT token_hash FROM share_links').get().token_hash,key);
+globalThis.__headers=new Headers();const request=new Request(url+'/api/shared',{headers:{Authorization:'Bearer '+key}});const publicRead=await shared.GET(request);assert.equal(publicRead.status,200);const publicState=await publicRead.json();assert.ok(publicState.state.materials.length);assert.equal(publicState.state.recipients,undefined);assert.equal(publicState.state.materials[0].available,10);
+const sample=globalThis.__sharedData.sharedData({materials:[],recipients:[{cpfPrefix:'123456'}],loans:[{person:'Pessoa',cpfPrefix:'123456',registration:'secret'}],movements:[{actor:'Operador',actorId:'private-id',cpfPrefix:'123456',note:'private-note'}]});assert.ok(!JSON.stringify(sample).includes('123456'));assert.ok(!JSON.stringify(sample).includes('secret'));assert.ok(!JSON.stringify(sample).includes('private-'));
+globalThis.__headers=request.headers;assert.equal((await state.GET()).status,401);assert.equal((await state.POST(new Request(url+'/api/state',{method:'POST',headers:{origin:url,Authorization:'Bearer '+key},body:JSON.stringify({action:'entry',quantity:999})}))).status,401);
+assert.equal((await shared.GET(new Request(url+'/api/shared'))).status,404);assert.equal((await shared.GET(new Request(url+'/api/shared',{headers:{Authorization:'Bearer '+'a'.repeat(64)}}))).status,404);
+globalThis.__headers=new Headers({cookie:newLogin.cookie});assert.equal((await shares.GET()).status,200);assert.equal((await shares.POST(shareReq({action:'revoke',id:link.id}))).status,200);globalThis.__headers=new Headers();assert.equal((await shared.GET(request)).status,404);
+console.log('PASS: anonymous read-only share, token hash, sanitized data, authenticated management, origin checks, rejected writes and revocation.');
+
 db.close();
