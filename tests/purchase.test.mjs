@@ -1,0 +1,12 @@
+import ts from 'typescript';import fs from 'node:fs';import assert from 'node:assert/strict';
+const js=ts.transpileModule(fs.readFileSync('app/purchase.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {purchasePlan}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+assert.deepEqual(purchasePlan({minimum:10,available:4,unit:'un'}),{target:15,quantity:11,whole:true});
+assert.equal(purchasePlan({minimum:3,available:1,unit:'UN.'}).quantity,4);
+assert.equal(purchasePlan({minimum:10,available:16,unit:'un'}).quantity,0);
+assert.equal(purchasePlan({minimum:0,available:0,unit:'un'}).quantity,0);
+assert.equal(purchasePlan({minimum:10,available:12,unit:'un'}).quantity,3);
+assert.equal(purchasePlan({minimum:.1,available:.05,unit:'kg'}).quantity,.1);
+assert.equal(purchasePlan({minimum:.001,available:0,unit:'kg'}).target,.002);
+assert.equal(purchasePlan({minimum:10,available:15,unit:'un'}).quantity,0);
+console.log('PASS: mínimo + 50%, desconto do saldo, quantidades inteiras, decimais, mínimo zero e alvo atingido.');

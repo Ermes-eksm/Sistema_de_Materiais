@@ -52,5 +52,13 @@ Sistema responsivo em português para almoxarifado, com banco persistente D1 e c
 - A migração acrescenta a área às sessões existentes com padrão Obra. Nenhum dado de inventário é excluído ou movido.
 - Para trocar, saia da sessão e escolha o outro almoxarifado na tela de entrada. O nome da área aparece no cabeçalho e nos relatórios/exportações.
 
+## Relatórios de estoque e compra
+- Em Relatórios, selecione Estoque atual, Pedido de compra ou Movimentações e pendências. Cada relatório pode ser impresso/salvo como PDF; estoque e pedido têm exportação CSV própria.
+- Estoque atual mostra saldo disponível, custódia, manutenção, baixas acumuladas e estoque mínimo do almoxarifado da sessão.
+- Pedido de compra usa alvo = mínimo × 1,5 e quantidade a comprar = máximo(0, alvo − disponível). Inclui todos os materiais com mínimo positivo e saldo abaixo do alvo.
+- Unidades de contagem reconhecidas (un, unidade, par, kit, caixa, pacote e abreviações) arredondam o alvo e a quantidade para cima até o inteiro. Outras unidades usam até três casas decimais, arredondadas para cima.
+- Mínimo zero exclui o item do pedido. Materiais em uso/manutenção não entram no saldo disponível. Emitir o pedido não altera o inventário e não representa compra efetivada.
+- Testes: `node tests/purchase.test.mjs`.
+
 ## Cópia GitHub
 Esta cópia não inclui credenciais, dados operacionais ou o identificador do Site. A aplicação requer backend Worker e D1; não funciona somente no GitHub Pages. Use Node.js 22.13+ e pnpm. Execute `pnpm install`, `pnpm dev` e aplique as migrações D1 em ordem no ambiente local. `pnpm build` gera o Worker. Login em produção exige HTTPS para o cookie seguro.
